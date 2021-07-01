@@ -7,6 +7,7 @@ require 'pathname'
 
 When(/^I save a screenshot as "([^"]+)"$/) do |filename|
   save_screenshot(filename)
+  attach File.open(filename, 'rb'), 'image/png'
 end
 
 When(/^I wait for "(\d+)" seconds?$/) do |arg1|
@@ -30,6 +31,7 @@ end
 Then(/^the kernel for "([^"]*)" should be correct$/) do |host|
   node = get_target(host)
   kernel_version, _code = node.run('uname -r')
+  log 'I should see kernel version: ' + kernel_version
   step %(I should see a "#{kernel_version.strip}" text)
 end
 
@@ -109,7 +111,7 @@ end
 
 When(/^I enter the hostname of "([^"]*)" terminal as "([^"]*)"$/) do |host, hostname|
   domain = read_branch_prefix_from_yaml
-  puts "The hostname of #{host} terminal is #{host}.#{domain}"
+  log "The hostname of #{host} terminal is #{host}.#{domain}"
   step %(I enter "#{host}.#{domain}" as "#{hostname}")
 end
 
@@ -566,7 +568,7 @@ And(/^I wait until I see "(.*?)" product has been added$/) do |product|
         break if product_class.include?('product-installed')
       end
     rescue Capybara::ElementNotFound => e
-      puts e
+      log e
     end
     sleep 1
   end
@@ -699,7 +701,7 @@ When(/^I bootstrap (traditional|minion) client "([^"]*)" using bootstrap script 
   # Use server if proxy is not defined as proxy is not mandatory
   target = $proxy
   if target_type.include? 'server' or $proxy.nil?
-    puts 'WARN: Bootstrapping to server, because proxy is not defined.' unless target_type.include? 'server'
+    log 'WARN: Bootstrapping to server, because proxy is not defined.' unless target_type.include? 'server'
     target = $server
   end
 
@@ -717,7 +719,7 @@ When(/^I bootstrap (traditional|minion) client "([^"]*)" using bootstrap script 
   cat /srv/www/htdocs/pub/bootstrap/bootstrap.sh"
   output, = target.run(cmd)
   unless output.include? key
-    STDOUT.puts output
+    log output
     raise "Key: #{key} not included"
   end
 
@@ -730,7 +732,7 @@ When(/^I bootstrap (traditional|minion) client "([^"]*)" using bootstrap script 
   system_name = get_system_name(host)
   output, = target.run("expect -f /tmp/#{boostrap_script} #{system_name}")
   unless output.include? '-bootstrap complete-'
-    STDOUT.puts output
+    log output
     raise "Bootstrap didn't finish properly"
   end
 end
@@ -760,7 +762,7 @@ Then(/^I add (server|proxy) record into hosts file on "([^"]*)" if avahi is used
     ip = output.split("\n")[2].split[1].split('/')[0]
     node.run("echo '#{record.public_ip} #{record.full_hostname} #{record.hostname}' >> /etc/hosts")
   else
-    puts 'Record not added - avahi domain is not detected'
+    log 'Record not added - avahi domain is not detected'
   end
 end
 
@@ -822,24 +824,24 @@ When(/^I enable repositories before installing Docker$/) do
 
   # Distribution
   repos = "os_pool_repo os_update_repo"
-  puts $build_host.run("zypper mr --enable #{repos}")
+  log $build_host.run("zypper mr --enable #{repos}")
 
   # Tools
   repos, _code = $build_host.run('zypper lr | grep "tools" | cut -d"|" -f2')
-  puts $build_host.run("zypper mr --enable #{repos.gsub(/\s/, ' ')}")
+  log $build_host.run("zypper mr --enable #{repos.gsub(/\s/, ' ')}")
 
   # Development and Desktop Applications (required)
   # (we do not install Python 2 repositories in this branch
   #  because they are not needed anymore starting with version 4.1)
   if os_family =~ /^sles/ && os_version =~ /^15/
     repos = "devel_pool_repo devel_updates_repo desktop_pool_repo desktop_updates_repo"
-    puts $build_host.run("zypper mr --enable #{repos}")
+    log $build_host.run("zypper mr --enable #{repos}")
   end
 
   # Containers
   unless os_family =~ /^opensuse/ || os_version =~ /^11/
     repos = "containers_pool_repo containers_updates_repo"
-    puts $build_host.run("zypper mr --enable #{repos}")
+    log $build_host.run("zypper mr --enable #{repos}")
   end
 
   $build_host.run('zypper -n --gpg-auto-import-keys ref')
@@ -850,24 +852,24 @@ When(/^I disable repositories after installing Docker$/) do
 
   # Distribution
   repos = "os_pool_repo os_update_repo"
-  puts $build_host.run("zypper mr --disable #{repos}")
+  log $build_host.run("zypper mr --disable #{repos}")
 
   # Tools
   repos, _code = $build_host.run('zypper lr | grep "tools" | cut -d"|" -f2')
-  puts $build_host.run("zypper mr --disable #{repos.gsub(/\s/, ' ')}")
+  log $build_host.run("zypper mr --disable #{repos.gsub(/\s/, ' ')}")
 
   # Development and Desktop Applications (required)
   # (we do not install Python 2 repositories in this branch
   #  because they are not needed anymore starting with version 4.1)
   if os_family =~ /^sles/ && os_version =~ /^15/
     repos = "devel_pool_repo devel_updates_repo desktop_pool_repo desktop_updates_repo"
-    puts $build_host.run("zypper mr --disable #{repos}")
+    log $build_host.run("zypper mr --disable #{repos}")
   end
 
   # Containers
   unless os_family =~ /^opensuse/ || os_version =~ /^11/
     repos = "containers_pool_repo containers_updates_repo"
-    puts $build_host.run("zypper mr --disable #{repos}")
+    log $build_host.run("zypper mr --disable #{repos}")
   end
 end
 
@@ -876,12 +878,12 @@ When(/^I enable repositories before installing branch server$/) do
 
   # Distribution
   repos = "os_pool_repo os_update_repo"
-  puts $proxy.run("zypper mr --enable #{repos}")
+  log $proxy.run("zypper mr --enable #{repos}")
 
   # Server Applications
   if os_family =~ /^sles/ && os_version =~ /^15/
     repos = "module_server_applications_pool_repo module_server_applications_update_repo"
-    puts $proxy.run("zypper mr --enable #{repos}")
+    log $proxy.run("zypper mr --enable #{repos}")
   end
 end
 
@@ -890,12 +892,12 @@ When(/^I disable repositories after installing branch server$/) do
 
   # Distribution
   repos = "os_pool_repo os_update_repo"
-  puts $proxy.run("zypper mr --disable #{repos}")
+  log $proxy.run("zypper mr --disable #{repos}")
 
   # Server Applications
   if os_family =~ /^sles/ && os_version =~ /^15/
     repos = "module_server_applications_pool_repo module_server_applications_update_repo"
-    puts $proxy.run("zypper mr --disable #{repos}")
+    log $proxy.run("zypper mr --disable #{repos}")
   end
 end
 
@@ -999,7 +1001,7 @@ end
 def token(secret, claims = {})
   payload = {}
   payload.merge!(claims)
-  puts secret
+  log secret
   JWT.encode payload, [secret].pack('H*').bytes.to_a.pack('c*'), 'HS256'
 end
 
@@ -1133,10 +1135,10 @@ And(/^the notification badge and the table should count the same amount of messa
   badge_xpath = "//i[contains(@class, 'fa-bell')]/following-sibling::*[text()='#{table_notifications_count}']"
 
   if table_notifications_count == '0'
-    puts "All notification-messages are read, I expect no notification badge"
-    raise "xpath: #{badge_xpath} found" if all(:xpath, badge_xpath).any?
+    log "All notification-messages are read, I expect no notification badge"
+    raise "xpath: #{badge_xpath} found" if has_xpath?(badge_xpath)
   else
-    puts "Unread notification-messages count = " + table_notifications_count
+    log "Unread notification-messages count = " + table_notifications_count
     raise "xpath: #{badge_xpath} not found" unless find(:xpath, badge_xpath)
   end
 end
@@ -1158,7 +1160,7 @@ end
 
 Then(/^I check the first notification message$/) do
   if count_table_items == '0'
-    puts "There are no notification messages, nothing to do then"
+    log "There are no notification messages, nothing to do then"
   else
     within(:xpath, '//section') do
       row = find(:xpath, "//div[@class=\"table-responsive\"]/table/tbody/tr[.//td]", match: :first)
@@ -1190,7 +1192,7 @@ When(/^I remove package "([^"]*)" from highstate$/) do |package|
   rows = find(:xpath, event_table_xpath)
   rows.all('tr').each do |tr|
     next unless tr.text.include?(package)
-    puts tr.text
+    log tr.text
     tr.find("##{package}-pkg-state").select('Removed')
     next if has_css?('#save[disabled]')
     steps %(
@@ -1230,7 +1232,7 @@ When(/^I create the MU repositories for "([^"]*)"$/) do |client|
   repo_list.each do |_repo_name, repo_url|
     unique_repo_name = generate_repository_name(repo_url)
     if repository_exist? unique_repo_name
-      puts "The MU repository #{unique_repo_name} was already created, we will reuse it."
+      log "The MU repository #{unique_repo_name} was already created, we will reuse it."
     else
       content_type = (client.include? 'ubuntu') || (client.include? 'debian') ? 'deb' : 'yum'
       steps %(
@@ -1342,7 +1344,7 @@ When(/^I add "([^\"]*)" calendar file as url$/) do |file|
   raise 'File injection failed' unless return_code.zero?
   $server.run("chmod 644 #{dest}")
   url = "http://#{$server.full_hostname}/pub/" + file
-  puts "URL: #{url}"
+  log "URL: #{url}"
   step %(I enter "#{url}" as "calendar-data-text")
 end
 
